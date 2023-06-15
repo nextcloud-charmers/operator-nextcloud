@@ -1,0 +1,16 @@
+<?php
+// DEPLOYED WITH JUJU DONT TOUCH THIS MANUALLY
+// Nextcloud supports loading configuration parameters from multiple files.
+// You can add arbitrary files ending with .config.php in the config/ directory,
+// and the values in these files take precedence over config.php.
+$CONFIG = array (
+  'memcache.distributed' => '\OC\Memcache\Redis',
+  'memcache.locking' => '\OC\Memcache\Redis',
+  'filelocking.enabled' => true,
+  'memcache.local' => '\OC\Memcache\Redis',
+
+  'redis' => [
+     'host' => '{{redis_hostname}}',
+     'port' => {{redis_port}},
+  ],
+);

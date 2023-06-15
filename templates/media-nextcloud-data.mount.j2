@@ -1,0 +1,14 @@
+[Unit]
+Description=Nextcloud data on NFS
+After=network.target
+
+[Mount]
+What={{hostname}}:{{mountpoint}}
+Where=/media/nextcloud/data
+Type=nfs
+Options=_netdev,auto
+# Options: {{options}}
+# type: {{fstype}}
+
+[Install]
+WantedBy=multi-user.target

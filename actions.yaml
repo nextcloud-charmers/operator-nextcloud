@@ -1,0 +1,30 @@
+# Copyright 2020 Erik Lönroth
+# See LICENSE file for licensing details.
+#
+set-trusted-domain:
+  description: 'Set the trusted domain by invoking <occ config:system:set trusted_domain>.'
+  params:
+    domain:
+      decription: 'Domain name to set as trusted. E.g. domain=example.com. Must run leader!'
+      type: string
+  required: [ domain ]
+
+add-missing-indices:
+  description: 'Runs occ db:add-missing-indices'
+  params: {}
+
+convert-filecache-bigint:
+  description: 'Put site in maintenance while running occ db:convert-filecache-bigint'
+  params: {}
+
+maintenance:
+  description: 'Runs occ maintenance:mode --on/off'
+  params:
+    enable:
+      description: "Either true or false"
+      type: boolean
+  required: [ enable ]
+
+get-admin-password:
+  description: 'Gets the initial admin password. This will only work once.'
+  params: {}

@@ -1,0 +1,19 @@
+<?php
+// DEPLOYED WITH JUJU DONT TOUCH THIS MANUALLY
+// Nextcloud supports loading configuration parameters from multiple files.
+// You can add arbitrary files ending with .config.php in the config/ directory,
+// and the values in these files take precedence over config.php.
+$CONFIG = array (
+  'objectstore' => [
+    'class' => '\\OC\\Files\\ObjectStore\\S3',
+    'arguments' => [
+      'bucket' => 'nextcloud',
+      'autocreate' => false,
+      'key'    => '{{ceph_key}}',
+      'secret' => '{{ceph_secret}}',
+      'hostname' => '{{rados_gw_hostname}}',
+      'port' => '{{rados_gw_port}}',
+      'use_ssl' => false,
+    ],
+  ],
+);

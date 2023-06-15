@@ -1,0 +1,4 @@
+; Nextcloud redis session (File rendered by Juju)
+; priority=30
+session.save_handler = redis
+session.save_path = "tcp://{{redis_hostname}}:{{redis_port}}"

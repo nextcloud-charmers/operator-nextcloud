@@ -1,0 +1,26 @@
+name: Release Nextcloud to Charmhub
+
+# Triggered when changes happen in the operator-nextcloud subdirectory.
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    name: Build nextcloud charm
+    uses: canonical/data-platform-workflows/.github/workflows/build_charm_without_cache.yaml@fix-build-without-cache-monorepo
+
+  release:
+    name: Release charm
+    needs:
+      - build
+    uses: canonical/data-platform-workflows/.github/workflows/release_charm.yaml@v2
+    with:
+      channel: latest/edge
+      artifact-name: ${{ needs.build.outputs.artifact-name }}
+    secrets:
+      charmhub-token: ${{ secrets.CHARMHUB_TOKEN }}
+    permissions:
+      contents: write  # Needed to create GitHub release
