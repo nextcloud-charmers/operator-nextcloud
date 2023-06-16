@@ -131,27 +131,48 @@ class NextcloudCharm(CharmBase):
         """
         Any configuration change trigger a complete reconfigure of
         the php and apache and also a restart of apache.
+        
+        * All units reconfigure apache and php settings.
+        * Leader configure nextcloud
+        * All changes restarts apache.
+
         :param event:
         :return:
         """
         logger.debug(emojis.EMOJI_CORE_HOOK_EVENT + sys._getframe().f_code.co_name)
+        
+        # All units reconfigure apache and php settings.
         self._config_apache()
         self._config_php()
+        
+        # Leader configures nextcloud
         if self.model.unit.is_leader():
-            self._config_overwriteprotocol()
-            self._config_overwritecliurl()
-            self._config_default_phone_region()
-            self.updateClusterRelationData()
-            # Untoggle this after we have ran updateClusterRelationData
-            self._stored.config_altered_on_disk = False
-
-        self._config_debug()
+            logger.debug(f"Leader unit ")
+        
+            if self._stored.nextcloud_initialized:
+                self._config_overwriteprotocol()
+                self._config_overwritecliurl()
+                self._config_default_phone_region()
+                self.updateClusterRelationData()
+                # Set self._stored.config_altered_on_disk = False after we have ran updateClusterRelationData
+                # So to be sure that it can be toggled again if other component changes needs to signal this.
+                self._stored.config_altered_on_disk = False
+            else:
+                logger.debug(f"Leader unit defering config change while waiting for database")
+                self.unit.status = BlockedStatus("Nextcloud not initialized. Missing postgresql?")
+                event.defer()
+                return
+        # Non leaders
+        else:
+            # TODO: Need to refactor backup 
+            # if self.config.get('backup-host') and self._stored.nextcloud_initialized and self._stored.database_available:
+            #     self.unit.status = MaintenanceStatus("Configuring backup")
+            #     utils.config_backup(self.config, self._stored.nextcloud_datadir, self._stored.dbhost,
+            #                         self._stored.dbuser, self._stored.dbpass)
+            self._on_update_status(event)
+        
+        # All config changes restarts apache. This unfucks mis-configures
         sp.check_call(['systemctl', 'restart', 'apache2.service'])
-        if self.config.get('backup-host') and self._stored.nextcloud_initialized and self._stored.database_available:
-            self.unit.status = MaintenanceStatus("Configuring backup")
-            utils.config_backup(self.config, self._stored.nextcloud_datadir, self._stored.dbhost,
-                                self._stored.dbuser, self._stored.dbpass)
-        self._on_update_status(event)
 
     # Only leader is running this hook (verify this)
     def _on_leader_elected(self, event):
