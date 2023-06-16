@@ -56,3 +56,5 @@ Heitor Bittencourt
 [Nextcloud]: https://nextcloud.com/
 [Kafit.se]: https://kafit.se/?lang=en
 [Erik Lönroth]: https://eriklonroth.com
+
+Canonical - for Juju!
