@@ -603,8 +603,16 @@ class NextcloudCharm(CharmBase):
             sys.exit(-1)
 
     def _nextcloud_version(self):
-        logger.debug("Determined nextcloud version: " + json.loads(Occ.status().stdout)['version'])
-        return json.loads(Occ.status().stdout)['version']
+        """
+        Get Nextcloud version by calling Occ.status()
+        Returns: 0 if it can't be retrieved.
+        """
+        try:
+            _v = json.loads(Occ.status().stdout)['version']
+            logger.debug(f"Determined nextcloud version: {_v}")
+            return _v
+        except:
+            return "0"
 
     def _checkLogConfigDiff(self):
         """
