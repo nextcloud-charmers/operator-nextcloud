@@ -6,6 +6,7 @@ import subprocess as sp
 import sys
 import os
 import stat
+import time
 import socket
 from pathlib import Path
 import json
@@ -109,13 +110,16 @@ class NextcloudCharm(CharmBase):
                 self.unit.status = MaintenanceStatus("installing (from resource).")
                 tarfile_path = self.model.resources.fetch('nextcloud-tarfile')
                 utils.extract_nextcloud(tarfile_path)
+                self._stored.nextcloud_fetched = True
             except Exception as e:
                 logger.debug("Extracting resources failed - trying network." + str(e))
                 self.unit.status = MaintenanceStatus("installing (from network).")
                 utils.fetch_and_extract_nextcloud(self.config.get('nextcloud-tarfile'))
+        else:
+            # Set permissions
             utils.set_nextcloud_permissions(self)
             self.unit.status = MaintenanceStatus("installed")
-            self._stored.nextcloud_fetched = True
+            
 
     def updateClusterRelationData(self):
         """
@@ -169,10 +173,16 @@ class NextcloudCharm(CharmBase):
             #     self.unit.status = MaintenanceStatus("Configuring backup")
             #     utils.config_backup(self.config, self._stored.nextcloud_datadir, self._stored.dbhost,
             #                         self._stored.dbuser, self._stored.dbpass)
-            self._on_update_status(event)
-        
+            pass
+
         # All config changes restarts apache. This unfucks mis-configures
         sp.check_call(['systemctl', 'restart', 'apache2.service'])
+
+        # Sleep 3 seconds to let apache settle. Then check status.
+        time.sleep(3)
+        self._on_update_status(event)
+
+
 
     # Only leader is running this hook (verify this)
     def _on_leader_elected(self, event):
@@ -270,7 +280,7 @@ class NextcloudCharm(CharmBase):
             utils.setPrettyUrls()
             utils.installCrontab()
             Occ.setBackgroundCron()
-            if self._is_nextcloud_installed():
+            if self._is_nextcloud_operational():
                 self._stored.nextcloud_initialized = True
                 self._on_update_status(event)
             else:
@@ -286,8 +296,8 @@ class NextcloudCharm(CharmBase):
 
     def _on_start(self, event):
         logger.debug(emojis.EMOJI_CORE_HOOK_EVENT + sys._getframe().f_code.co_name)
-        if not self._is_nextcloud_installed():
-            logger.debug("Nextcloud not installed, defering start.")
+        if not self._is_nextcloud_operational():
+            logger.debug("Nextcloud not operational (occ fails), defering start.")
             event.defer()
             return
         try:
@@ -471,7 +481,7 @@ class NextcloudCharm(CharmBase):
                     self.unit.status = ActiveStatus(v + " " + emojis.EMOJI_CLOUD)
             except Exception as e:
                 logger.error("Failed query Nextcloud occ for status: ", e)
-                sys.exit(-1)
+                self.unit.status = BlockedStatus("Error getting status, check logs.")
 
     def _on_redis_available(self, event):
         """
@@ -590,7 +600,10 @@ class NextcloudCharm(CharmBase):
         if not self._stored.nextcloud_datadir.joinpath('.ocdata').exists():
             self._stored.nextcloud_datadir.joinpath('.ocdata').touch()
 
-    def _is_nextcloud_installed(self):
+    def _is_nextcloud_operational(self):
+        """
+        Determine operational status by calling on 'occ status'.
+        """
         status = Occ.status()
         logger.debug(status)
         try:
@@ -599,12 +612,20 @@ class NextcloudCharm(CharmBase):
         except IndexError:
             return False
         except Exception as e:
-            print("Failed determining installation status: ", e)
-            sys.exit(-1)
+            logger.error("Error determining Nextcloud status while checking operational status with occ: ", str(e))
+            return False
 
     def _nextcloud_version(self):
-        logger.debug("Determined nextcloud version: " + json.loads(Occ.status().stdout)['version'])
-        return json.loads(Occ.status().stdout)['version']
+        """
+        Get Nextcloud version by calling Occ.status()
+        Returns: 0 if it can't be retrieved.
+        """
+        try:
+            _v = json.loads(Occ.status().stdout)['version']
+            logger.debug(f"Determined nextcloud version: {_v}")
+            return _v
+        except:
+            return "0"
 
     def _checkLogConfigDiff(self):
         """
