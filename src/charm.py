@@ -270,7 +270,7 @@ class NextcloudCharm(CharmBase):
             utils.setPrettyUrls()
             utils.installCrontab()
             Occ.setBackgroundCron()
-            if self._is_nextcloud_installed():
+            if self._is_nextcloud_operational():
                 self._stored.nextcloud_initialized = True
                 self._on_update_status(event)
             else:
@@ -286,8 +286,8 @@ class NextcloudCharm(CharmBase):
 
     def _on_start(self, event):
         logger.debug(emojis.EMOJI_CORE_HOOK_EVENT + sys._getframe().f_code.co_name)
-        if not self._is_nextcloud_installed():
-            logger.debug("Nextcloud not installed, defering start.")
+        if not self._is_nextcloud_operational():
+            logger.debug("Nextcloud not operational (occ fails), defering start.")
             event.defer()
             return
         try:
@@ -471,7 +471,7 @@ class NextcloudCharm(CharmBase):
                     self.unit.status = ActiveStatus(v + " " + emojis.EMOJI_CLOUD)
             except Exception as e:
                 logger.error("Failed query Nextcloud occ for status: ", e)
-                sys.exit(-1)
+                self.unit.status = BlockedStatus("Error getting status, check logs.")
 
     def _on_redis_available(self, event):
         """
@@ -590,7 +590,10 @@ class NextcloudCharm(CharmBase):
         if not self._stored.nextcloud_datadir.joinpath('.ocdata').exists():
             self._stored.nextcloud_datadir.joinpath('.ocdata').touch()
 
-    def _is_nextcloud_installed(self):
+    def _is_nextcloud_operational(self):
+        """
+        Determine operational status by calling on 'occ status'.
+        """
         status = Occ.status()
         logger.debug(status)
         try:
@@ -599,8 +602,8 @@ class NextcloudCharm(CharmBase):
         except IndexError:
             return False
         except Exception as e:
-            print("Failed determining installation status: ", e)
-            sys.exit(-1)
+            logger.error("Error determining Nextcloud status while checking operational status with occ: ", str(e))
+            return False
 
     def _nextcloud_version(self):
         """
