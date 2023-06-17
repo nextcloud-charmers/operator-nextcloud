@@ -3,3 +3,4 @@ ops-lib-pgsql==1.4
 xtarfile==0.1.0
 requests==2.28.2
 jinja2==3.1.2
+MarkupSafe<2.0.0
