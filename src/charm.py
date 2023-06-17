@@ -109,13 +109,16 @@ class NextcloudCharm(CharmBase):
                 self.unit.status = MaintenanceStatus("installing (from resource).")
                 tarfile_path = self.model.resources.fetch('nextcloud-tarfile')
                 utils.extract_nextcloud(tarfile_path)
+                self._stored.nextcloud_fetched = True
             except Exception as e:
                 logger.debug("Extracting resources failed - trying network." + str(e))
                 self.unit.status = MaintenanceStatus("installing (from network).")
                 utils.fetch_and_extract_nextcloud(self.config.get('nextcloud-tarfile'))
+        else:
+            # Set permissions
             utils.set_nextcloud_permissions(self)
             self.unit.status = MaintenanceStatus("installed")
-            self._stored.nextcloud_fetched = True
+            
 
     def updateClusterRelationData(self):
         """
