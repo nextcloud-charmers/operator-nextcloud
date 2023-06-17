@@ -6,6 +6,7 @@ import subprocess as sp
 import sys
 import os
 import stat
+import time
 import socket
 from pathlib import Path
 import json
@@ -172,10 +173,16 @@ class NextcloudCharm(CharmBase):
             #     self.unit.status = MaintenanceStatus("Configuring backup")
             #     utils.config_backup(self.config, self._stored.nextcloud_datadir, self._stored.dbhost,
             #                         self._stored.dbuser, self._stored.dbpass)
-            self._on_update_status(event)
-        
+            pass
+
         # All config changes restarts apache. This unfucks mis-configures
         sp.check_call(['systemctl', 'restart', 'apache2.service'])
+
+        # Sleep 3 seconds to let apache settle. Then check status.
+        time.sleep(3)
+        self._on_update_status(event)
+
+
 
     # Only leader is running this hook (verify this)
     def _on_leader_elected(self, event):
