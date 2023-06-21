@@ -18,7 +18,8 @@ from ops.model import (
     ActiveStatus,
     BlockedStatus,
     MaintenanceStatus,
-    WaitingStatus
+    WaitingStatus,
+    ModelError
 )
 import utils
 import emojis
@@ -104,21 +105,38 @@ class NextcloudCharm(CharmBase):
         utils.install_apt_update()
         utils.install_dependencies()
         utils.install_backup_dependencies()
+
+        # Install nextcloud either from resource (tarfile) or network.
         if not self._stored.nextcloud_fetched:
-            # Fetch nextcloud to /var/www/
+            self.unit.status = MaintenanceStatus("Fetching nextcloud...")
+            
+            # Try local resource install
             try:
-                self.unit.status = MaintenanceStatus("installing (from resource).")
                 tarfile_path = self.model.resources.fetch('nextcloud-tarfile')
                 utils.extract_nextcloud(tarfile_path)
+                utils.set_nextcloud_permissions(self)
+                self.unit.status = MaintenanceStatus("Nextcloud extracted from supplied tarfile.")
                 self._stored.nextcloud_fetched = True
+                return
+            except ModelError:
+                logger.info("No nextcloud-tarfile resource supplied.")
             except Exception as e:
-                logger.debug("Extracting resources failed - trying network." + str(e))
-                self.unit.status = MaintenanceStatus("installing (from network).")
+                logger.error("Extracting nextcloud tarfile failed. Aborting: " + str(e))
+                raise SystemExit(1)            
+            
+            # Try network install
+            try:
+                self.unit.status = MaintenanceStatus("fetching nextcloud from network...")
                 utils.fetch_and_extract_nextcloud(self.config.get('nextcloud-tarfile'))
+                utils.set_nextcloud_permissions(self)
+                self._stored.nextcloud_fetched = True
+                return
+            except Exception as ex:
+                logger.error("Fetching nextcloud from network failed. Aborting: " + str(e))
+                raise SystemExit(1)
         else:
-            # Set permissions
-            utils.set_nextcloud_permissions(self)
-            self.unit.status = MaintenanceStatus("installed")
+            logger.debug("Nextcloud already flagged as installed.")
+            self.unit.status = MaintenanceStatus("Nextcloud already installed.")
             
 
     def updateClusterRelationData(self):
