@@ -21,6 +21,7 @@ from ops.model import (
     WaitingStatus,
     ModelError
 )
+import tarfile
 import utils
 import emojis
 from occ import Occ
@@ -113,15 +114,21 @@ class NextcloudCharm(CharmBase):
             # Try local resource install
             try:
                 tarfile_path = self.model.resources.fetch('nextcloud-tarfile')
-                utils.extract_nextcloud(tarfile_path)
-                utils.set_nextcloud_permissions(self)
-                self.unit.status = MaintenanceStatus("Nextcloud extracted from supplied tarfile.")
-                self._stored.nextcloud_fetched = True
-                return
+                if tarfile.is_tarfile(tarfile_path):
+                    logger.info("Resource is a tarfile.")
+                    utils.extract_nextcloud(tarfile_path)
+                    utils.set_nextcloud_permissions(self)
+                    self.unit.status = MaintenanceStatus("Nextcloud extracted from supplied tarfile.")
+                    self._stored.nextcloud_fetched = True
+                    return
+                else:
+                    logger.info("Supplied nextcloud-tarfile resource is NOT a tarfile.")
             except ModelError:
                 logger.info("No nextcloud-tarfile resource supplied.")
+            except tarfile.TarError as te:
+                logger.error("Extracting tarfile error (this could be due to charmhub resource being an empty file.):" + str(te))
             except Exception as e:
-                logger.error("Extracting nextcloud tarfile failed. Aborting: " + str(e))
+                logger.error("Extracting nextcloud tarfile failed:" + str(e))
                 raise SystemExit(1)            
             
             # Try network install
@@ -143,11 +150,14 @@ class NextcloudCharm(CharmBase):
         """
         Trigger update of the cluster-relation data.
         """
-        logger.debug("Updating cluster relation data config.php on disk.")
-        cluster_rel = self.model.relations['cluster'][0]
-        with open(NEXTCLOUD_CONFIG_PHP) as f:
-            nextcloud_config = f.read()
-            cluster_rel.data[self.app]['nextcloud_config'] = str(nextcloud_config)
+        if self.model.unit.is_leader() and self._stored.nextcloud_initialized:
+            logger.debug("Leader unit updating cluster relation data config.php from config.php")
+            cluster_rel = self.model.relations['cluster'][0]
+            with open(NEXTCLOUD_CONFIG_PHP) as f:
+                nextcloud_config = f.read()
+                cluster_rel.data[self.app]['nextcloud_config'] = str(nextcloud_config)
+        else:
+            logger.debug("Leader unit waiting for nextcloud before reading config.php")
 
     def _on_config_changed(self, event):
         """
@@ -169,7 +179,7 @@ class NextcloudCharm(CharmBase):
         
         # Leader configures nextcloud
         if self.model.unit.is_leader():
-            logger.debug(f"Leader unit ")
+            logger.debug(f"Leader unit runs config_change event")
         
             if self._stored.nextcloud_initialized:
                 self._config_overwriteprotocol()
@@ -186,6 +196,7 @@ class NextcloudCharm(CharmBase):
                 return
         # Non leaders
         else:
+            logger.debug(f"Non-leader unit runs config_change event")
             # TODO: Need to refactor backup 
             # if self.config.get('backup-host') and self._stored.nextcloud_initialized and self._stored.database_available:
             #     self.unit.status = MaintenanceStatus("Configuring backup")
@@ -200,13 +211,12 @@ class NextcloudCharm(CharmBase):
         time.sleep(3)
         self._on_update_status(event)
 
-
-
     # Only leader is running this hook (verify this)
     def _on_leader_elected(self, event):
         logger.debug(emojis.EMOJI_CORE_HOOK_EVENT + sys._getframe().f_code.co_name)
         logger.debug("!!!!!!!! I'm new nextcloud leader !!!!!!!!")
-        self.update_config_php_trusted_domains()
+        if self.model.unit.is_leader() and self._stored.nextcloud_initialized:
+            self.update_config_php_trusted_domains()
 
     def update_config_php_trusted_domains(self):
         """
@@ -290,10 +300,27 @@ class NextcloudCharm(CharmBase):
         # We have a database.
         self._stored.database_available = True
 
-        # Leader gets to initialize and run crontabs
+        #Fetch database information
+        data = self.database.fetch_relation_data()
+        logger.debug("Got following database data: %s", data)
+        for key, val in data.items():
+            if not val:
+                continue
+            logger.info("New PSQL database endpoint is %s", val["endpoints"])
+            host, port = val["endpoints"].split(":")
+            db_data = {
+                "db_host": host,
+                "db_port": port,
+                "db_username": val["username"],
+                "db_password": val["password"],
+                "db_name": val["database"],
+                "pgsql_version": val["version"]
+            }
+
+        # Leader initialize Nextcloud and run crontabs
         if self.model.unit.is_leader() and not self._stored.nextcloud_initialized:
             utils.set_nextcloud_permissions(self)
-            self._init_nextcloud()
+            self._init_nextcloud(db_data)
             self._add_initial_trusted_domain()
             utils.setPrettyUrls()
             utils.installCrontab()
@@ -302,13 +329,13 @@ class NextcloudCharm(CharmBase):
                 self._stored.nextcloud_initialized = True
                 self._on_update_status(event)
             else:
-                self._stored.nextcloud_initialized = False
                 logger.error("FAILED initializing Nextcloud, check logs.")
                 raise SystemExit(1)
 
     def _on_database_relation_removed(self, event) -> None:
         """Event is fired when relation with postgres is broken."""
         self._stored.database_available = False
+        self._stored.nextcloud_initialized = False
         self.unit.status = WaitingStatus("Waiting for database relation")
         raise SystemExit(0)
 
@@ -409,7 +436,7 @@ class NextcloudCharm(CharmBase):
         utils.config_apache2(Path(self.charm_dir / 'templates'), 'nextcloud.conf.j2')
         self._stored.apache_configured = True
 
-    def _init_nextcloud(self):
+    def _init_nextcloud(self, database_info):
         """
         Initializes nextcloud via the nextcloud occ interface.
         :return:
@@ -423,14 +450,14 @@ class NextcloudCharm(CharmBase):
             os.chmod('/root/.onetimelogin', stat.S_IREAD)
 
         # Collect database information from relation.
-        db_data = self.fetch_postgres_relation_data()
+        # db_data = self.fetch_postgres_relation_data()
 
         ctx = {'dbtype': 'pgsql',
-               'dbname': db_data.get("db_name", None),
-               'dbhost': db_data.get("db_host", None),
-               'dbport': db_data.get("db_port", None),
-               'dbpass': db_data.get("db_password", None),
-               'dbuser': db_data.get("db_username", None),
+               'dbname': database_info.get("db_name", None),
+               'dbhost': database_info.get("db_host", None),
+               'dbport': database_info.get("db_port", None),
+               'dbpass': database_info.get("db_password", None),
+               'dbuser': database_info.get("db_username", None),
                'adminpassword': p,
                'adminusername': 'admin',
                'datadir': str(self._stored.nextcloud_datadir)
@@ -622,16 +649,27 @@ class NextcloudCharm(CharmBase):
         """
         Determine operational status by calling on 'occ status'.
         """
-        status = Occ.status()
-        logger.debug(status)
+        # Get stdout from the CompletedProcess object
+        stdout_data = Occ.status().stdout
+        
+        # Parse the stdout as JSON and convert it into a dictionary
         try:
-            match = re.findall(r'\{.*?\}', status.stdout)
-            return json.loads(match[0])['installed']
-        except IndexError:
+            status_dict = json.loads(stdout_data)
+        except:
             return False
-        except Exception as e:
-            logger.error("Error determining Nextcloud status while checking operational status with occ: ", str(e))
-            return False
+
+        # stdout='{"installed":false,
+        # "version":"26.0.1.1",
+        # "versionstring":"26.0.1",
+        # "edition":"",
+        # "maintenance":false,
+        # "needsDbUpgrade":false,
+        # "productname":"Nextcloud",
+        # "extendedSupport":false}
+
+        installed = bool(status_dict["installed"])
+        logger.debug(f"Nextcloud operational status: {str(installed)}")
+        return installed
 
     def _nextcloud_version(self):
         """
@@ -666,29 +704,6 @@ class NextcloudCharm(CharmBase):
                 logger.info("nextcloud_config key not found in cluster_rel.data.")
         except KeyError:
             logger.error("Error accessing cluster_rel.data dictionary.")
-
-    def fetch_postgres_relation_data(self) -> dict:
-        """
-        Get relational data.
-        """
-        data = self.database.fetch_relation_data()
-        logger.debug("Got following database data: %s", data)
-        for key, val in data.items():
-            if not val:
-                continue
-            logger.info("New PSQL database endpoint is %s", val["endpoints"])
-            host, port = val["endpoints"].split(":")
-            db_data = {
-                "db_host": host,
-                "db_port": port,
-                "db_username": val["username"],
-                "db_password": val["password"],
-                "db_name": val["database"],
-                "pgsql_version": val["version"]
-            }
-            return db_data
-        self.unit.status = WaitingStatus("Waiting for database relation")
-        raise SystemExit(0)
 
 
 if __name__ == "__main__":
