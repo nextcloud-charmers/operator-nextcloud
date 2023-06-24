@@ -1,4 +1,4 @@
-name: Juju Deployment
+name: CI Juju Deploy Nextcloud with Postgresql
 
 on:
   workflow_dispatch:
