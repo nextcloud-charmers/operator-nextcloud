@@ -28,8 +28,8 @@ from occ import Occ
 from interface_http import HttpProvider
 import interface_redis
 import interface_mount
-from charms.data_platform_libs.v0.data_interfaces import DatabaseCreatedEvent
-from charms.data_platform_libs.v0.data_interfaces import DatabaseRequires
+from charms.data_platform_libs.v0.data_interfaces import (DatabaseCreatedEvent,
+                                                          DatabaseRequires)
 
 
 logger = logging.getLogger(__name__)
@@ -68,7 +68,7 @@ class NextcloudCharm(CharmBase):
             self.on.start: self._on_start,
             self.on.leader_elected: self._on_leader_elected,
             self.database.on.database_created: self._on_database_created,
-            self.database.on.endpoints_changed: self._on_database_created,
+#            self.database.on.endpoints_changed: self._on_database_created,
             self.redis.on.redis_available: self._on_redis_available,
             self.redis.on.redis_broken: self._on_redis_broken,
             self.on.update_status: self._on_update_status,
@@ -297,25 +297,33 @@ class NextcloudCharm(CharmBase):
         Other peers will copy the configuration and therefore must trust that
         nextcloud is initialized and that we have a database.
         """
-        # We have a database.
-        self._stored.database_available = True
 
-        #Fetch database information
-        data = self.database.fetch_relation_data()
-        logger.debug("Got following database data: %s", data)
-        for key, val in data.items():
-            if not val:
-                continue
-            logger.info("New PSQL database endpoint is %s", val["endpoints"])
-            host, port = val["endpoints"].split(":")
-            db_data = {
-                "db_host": host,
-                "db_port": port,
-                "db_username": val["username"],
-                "db_password": val["password"],
-                "db_name": val["database"],
-                "pgsql_version": val["version"]
-            }
+        # Fetch the data from the DatabaseCreatedEvent
+        host, port = event.endpoints.split(":")
+        db_data = {
+            "db_host": host,
+            "db_port": port,
+            "db_username": event.username,
+            "db_password": event.password,
+            "db_name": event.database,
+            "pgsql_version": event.version
+        }
+
+        # Validate the values
+        valid_values = (
+            db_data["db_host"] is not None
+            and db_data["db_port"] is not None
+            and db_data["db_username"] is not None
+            and db_data["db_password"] is not None
+            and db_data["db_name"] is not None
+            and db_data["pgsql_version"] is not None
+        )
+        if not valid_values:
+            logger.error("Invalid or missing values in db_data. Please check the input.")
+            raise SystemExit(1)
+
+        # Save the state of having a database.
+        self._stored.database_available = True
 
         # Leader initialize Nextcloud and run crontabs
         if self.model.unit.is_leader() and not self._stored.nextcloud_initialized:
