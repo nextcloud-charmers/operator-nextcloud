@@ -1,0 +1,53 @@
+name: Juju Deployment
+
+on:
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      # Use Canonical github actions that setup Juju for us with lxd.
+      # https://github.com/charmed-kubernetes/actions-operator
+      - name: Setup Juju operator environment (with lxd)  
+        uses: charmed-kubernetes/actions-operator@main
+        with:
+          provider: lxd
+
+      - name: Deploy PostgreSQL
+        run: |
+          juju deploy postgresql
+
+      - name: Deploy Nextcloud
+        run: |
+          juju deploy nextcloud --channel edge --series jammy
+
+      - name: Relate Nextcloud and PostgreSQL
+        run: |
+          juju relate nextcloud:database postgresql
+
+      - name: Wait for Nextcloud status to become active
+        run: |
+          set -x
+          for i in {1..240}; do
+            jq_status=$(juju status --format=json | jq -r '.applications.nextcloud."application-status"')
+            current_status=$(echo "$jq_status" | jq -r '.current')
+            if [[ "$current_status" == "active" ]]; then
+              echo "Nextcloud deployment is active!"
+              exit 0
+            elif [[ "$current_status" == "error" ]]; then
+              echo "Deployment failed. Error logs:"
+              juju debug-log --replay | tee debug.log
+              exit 1
+            else
+              echo "Waiting for nextcloud to be active...($i/240)"
+              echo "$jq_status"
+            fi
+            sleep 10
+          done
+          echo "Nextcloud deployment did not become active within 40 minutes."
+          exit 1
