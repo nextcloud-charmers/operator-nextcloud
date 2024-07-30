@@ -297,7 +297,7 @@ class NextcloudCharm(CharmBase):
         Other peers will copy the configuration and therefore must trust that
         nextcloud is initialized and that we have a database.
         """
-
+        logger.debug(emojis.EMOJI_POSTGRES_EVENT + sys._getframe().f_code.co_name)
         # Fetch the data from the DatabaseCreatedEvent
         host, port = event.endpoints.split(":")
         db_data = {
@@ -349,10 +349,19 @@ class NextcloudCharm(CharmBase):
 
     def _on_start(self, event):
         logger.debug(emojis.EMOJI_CORE_HOOK_EVENT + sys._getframe().f_code.co_name)
-        if not self._is_nextcloud_operational():
-            logger.debug("Nextcloud not operational (occ fails), defering start.")
-            event.defer()
-            return
+        retries = 3
+        delay = 10
+        for attempt in range(retries):
+            if self._is_nextcloud_operational():
+                break
+            logger.debug(f"Nextcloud not operational yet (occ fails), deferring start event. Attempt {attempt + 1} of {retries}")
+            self.unit.status = WaitingStatus("Waiting for Nextcloud to be ready before we can start.")
+            if attempt < retries - 1:
+                time.sleep(delay)
+            else:
+                event.defer()
+                return
+
         try:
             sp.check_call(['systemctl', 'restart', 'apache2.service'])
             self._on_update_status(event)
@@ -505,6 +514,9 @@ class NextcloudCharm(CharmBase):
         if not self._stored.nextcloud_fetched:
             self.unit.status = BlockedStatus("Nextcloud not fetched.")
 
+        elif not self._stored.database_available:
+            self.unit.status = BlockedStatus("No database.")
+
         elif not self._stored.nextcloud_initialized:
             self.unit.status = BlockedStatus("Nextcloud not initialized.")
 
@@ -513,9 +525,6 @@ class NextcloudCharm(CharmBase):
 
         elif not self._stored.php_configured:
             self.unit.status = BlockedStatus("PHP not configured.")
-
-        elif not self._stored.database_available:
-            self.unit.status = BlockedStatus("No database.")
 
         elif self._stored.config_altered_on_disk:
             # At this point, a configure event will unblock.
@@ -542,6 +551,7 @@ class NextcloudCharm(CharmBase):
         /var/www/nextcloud/config/redis.config.php - modified
         /etc/php/X.Y/mods-available/redis_session.ini - modified
         """
+        
         sp.run(['systemctl', 'restart', 'apache2.service'])
 
     def _on_redis_broken(self, event):
@@ -663,6 +673,7 @@ class NextcloudCharm(CharmBase):
         # Parse the stdout as JSON and convert it into a dictionary
         try:
             status_dict = json.loads(stdout_data)
+            logger.debug(f"Nextcloud OCC status: {status_dict}")
         except:
             return False
 

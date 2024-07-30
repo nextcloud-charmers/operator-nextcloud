@@ -35,7 +35,7 @@ options:
       Setting for php
   nextcloud-tarfile:
     type: string
-    default: https://download.nextcloud.com/server/releases/latest-27.tar.bz2
+    default: https://download.nextcloud.com/server/releases/latest-29.tar.bz2
     description: >
       Sources for nextcloud (must be tar.bz2)
   overwriteprotocol:
