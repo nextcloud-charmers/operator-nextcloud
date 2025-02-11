@@ -20,14 +20,9 @@ For a quick test of nextcloud, you can use this:
 
 To get the admin password:
 
-    juju run nextcloud/0 get-admin-password
+    juju run nextcloud/0 get-admin-password --wait
 
 Make sure to note it and change it after first login, since this action will only work once.
-
-## Debug deployment
-Debug the deployment by setting the model debug:
-
-    juju model-config logging-config="<root>=INFO;unit=DEBUG"
 
 ## Large scale deployment
 For a full scale out deployment with support for shared storage, redis and SSL deployment, see: https://charmhub.io/nextcloud/docs
