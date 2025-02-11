@@ -14,13 +14,18 @@ description: |
 summary: |
   The nextcloud charm
 
+# This syntax isnt liked by canonical github actions. Kept for reference.
+# platforms:
+#   ubuntu-22.04-amd64:
+#     build-on: [ubuntu@22.04:amd64]
+#     build-for: [ubuntu@22.04:amd64]
+#   ubuntu-24.04-amd64:
+#     build-on: [ubuntu@24.04:amd64]
+#     build-for: [ubuntu@24.04:amd64]
+
 platforms:
-  ubuntu-22.04-amd64:
-    build-on: [ubuntu@22.04:amd64]
-    build-for: [ubuntu@22.04:amd64]
-  ubuntu-24.04-amd64:
-    build-on: [ubuntu@24.04:amd64]
-    build-for: [ubuntu@24.04:amd64]
+  ubuntu@24.04:amd64:
+  ubuntu@22.04:amd64:
 
 provides:
   website:
