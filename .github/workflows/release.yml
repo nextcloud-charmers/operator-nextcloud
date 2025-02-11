@@ -10,16 +10,17 @@ on:
 jobs:
   build:
     name: Build nextcloud charm
-    uses: canonical/data-platform-workflows/.github/workflows/build_charm_without_cache.yaml@v2
-
+    uses: canonical/data-platform-workflows/.github/workflows/build_charm.yaml@v26.0.1
+    with:
+      charmcraft-snap-revision: 5780
   release:
     name: Release charm
     needs:
       - build
-    uses: canonical/data-platform-workflows/.github/workflows/release_charm.yaml@v2
+    uses: canonical/data-platform-workflows/.github/workflows/release_charm.yaml@v26.0.1
     with:
       channel: latest/edge
-      artifact-name: ${{ needs.build.outputs.artifact-name }}
+      artifact-prefix: ${{ needs.build.outputs.artifact-prefix }}
     secrets:
       charmhub-token: ${{ secrets.CHARMHUB_TOKEN }}
     permissions:
