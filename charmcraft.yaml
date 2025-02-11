@@ -1,22 +1,166 @@
-type: charm
-bases:
-  - build-on:
-      - name: ubuntu
-        channel: "20.04"
-    run-on:
-      - name: ubuntu
-        channel: "22.04"
-        architectures: [amd64]
-      - name: ubuntu
-        channel: "20.04"
-        architectures: [amd64]
-      - name: ubuntu
-        channel: "18.04"
-        architectures: [amd64]
+# Copyright 2020 Erik Lönroth
+# See LICENSE file for licensing details.
 
-# setuptools workaround: https://github.com/canonical/charmcraft/issues/632
-#parts:
-#  charm:
-#    prime: 
-#      - scripts
-#    charm-python-packages: [setuptools < 58]
+name: nextcloud
+
+type: charm
+
+title: |
+  Nextcloud operator for machine or vms.
+
+description: |
+  Nextcloud is a file shareing, private office and collaboration platform.
+
+summary: |
+  The nextcloud charm
+
+platforms:
+  ubuntu-22.04-amd64:
+    build-on: [ubuntu@22.04:amd64]
+    build-for: [ubuntu@22.04:amd64]
+  ubuntu-24.04-amd64:
+    build-on: [ubuntu@24.04:amd64]
+    build-for: [ubuntu@24.04:amd64]
+
+provides:
+  website:
+    interface: http
+
+requires:
+  db:
+    interface: pgsql
+
+  database:
+    interface: postgresql_client
+    limit: 1
+
+  redis:
+    interface: redis
+    optional: true
+
+  shared-fs:
+    interface: mount
+    optional: true
+
+  ceph:
+    interface: ceph
+    optional: true
+
+peers:
+  cluster:
+    interface: nextcloud-cluster
+
+resources:
+  nextcloud-tarfile:
+    type: file
+    filename: nextcloud.tar.bz2
+    description: Nextcloud tar file to use instead of downloading it.
+
+storage:
+  datadir:
+    type: filesystem
+    description: This is used as datadir for nextcloud.
+    minimum-size: 100M
+    location: /var/nextcloud/data
+    multiple:
+      range: 0-1
+
+
+config:
+  options:
+    fqdn:
+      type: string
+      default: ""
+      description: >
+        FQDN of Nextcloud instance
+    port:
+      type: int
+      description: >
+        Port where the Nextcloud website will be listening.
+    php_max_file_uploads:
+      type: int
+      default: 20
+      description: >
+        Setting for php
+    php_upload_max_filesize:
+      type: string
+      default: '512M'
+      description: >
+        Setting for php
+    php_post_max_size:
+      type: string
+      default: '512M'
+      description: >
+        Setting for php
+    php_memory_limit:
+      type: string
+      default: '1G'
+      description: >
+        Setting for php
+    nextcloud-tarfile:
+      type: string
+      default: https://download.nextcloud.com/server/releases/latest-29.tar.bz2
+      description: >
+        Sources for nextcloud (must be tar.bz2)
+    overwriteprotocol:
+      type: string
+      default: http
+      description: >
+        Set this to https if you place a ssl-termination proxy in front of your nextcloud instance.
+    overwrite-cli-url:
+      type: string
+      default: ''
+      description: >
+        Use this configuration parameter to specify the base URL for any URLs which are generated within
+        Nextcloud using any kind of command line tools (cron or occ).
+        The value should contain the full base URL: https://nextcloud.dwellir.com
+    backup-host:
+      type: string
+      default: ''
+      description: >
+        Host where to send backups.
+    backup-port:
+      type: int
+      default: 22
+      description: >
+        SSH port to use for rsync to send backups to backup-host.
+    backup-user:
+      type: string
+      default: ''
+      description: >
+        User on backup-host that will receive the backups.
+    backup-slack-webhook:
+      type: string
+      default: ''
+      description: >
+        Webhook to Slack channel for sending backup status.
+    backup-pagerduty-serviceid:
+      type: string
+      default: ''
+      description: >
+        PagerDuty service ID for backup failure alarms.
+    backup-pagerduty-token:
+      type: string
+      default: ''
+      description: >
+        PagerDuty token for backup failure alarms.
+    backup-pagerduty-email:
+      type: string
+      default: ''
+      description: >
+        PagerDuty service email for backup failure alarms.
+    debug:
+      type: boolean
+      default: false
+      description: >
+        Set debug mode for the main config.
+    default-phone-region:
+      type: string
+      default: 'SE'
+      description: >
+        Phone region code (ISO 3166-1)
+
+parts:
+  charm:
+    plugin: charm
+    source: .
