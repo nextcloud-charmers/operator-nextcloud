@@ -6,11 +6,6 @@ type: charm
 title: |
   Nextcloud operator for machine or vms.
 
-description: |
-  Nextcloud is a file shareing, private office and collaboration platform.
-
-summary: |
-  The nextcloud charm
 
 # This syntax isnt liked by canonical github actions. Kept for reference.
 # platforms:
