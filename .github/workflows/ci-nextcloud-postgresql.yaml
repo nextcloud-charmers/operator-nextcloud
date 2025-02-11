@@ -9,7 +9,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       # Use Canonical github actions that setup Juju for us with lxd.
       # https://github.com/charmed-kubernetes/actions-operator
