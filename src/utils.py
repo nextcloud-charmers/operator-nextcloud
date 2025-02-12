@@ -81,6 +81,7 @@ def install_apt_update():
 
 
 def install_backup_dependencies():
+    logger.info("Installing backup deps")
     try:
         packages = ['pigz',
                     'postgresql-client',
@@ -93,7 +94,7 @@ def install_backup_dependencies():
         sys.exit(-1)
     try:
         packages = ['pdpyras==4.4.0']
-        command = ["sudo", "pip3", "install"]
+        command = ["sudo", "pip3", "install", "--break-system-packages"]
         command.extend(packages)
         sp.run(command, check=True)
     except sp.CalledProcessError as e:
@@ -279,11 +280,14 @@ def config_php(phpmod_context, templates_path, template):
     target_72 = Path('/etc/php/7.2/mods-available/nextcloud.ini')
     target_74 = Path('/etc/php/7.4/mods-available/nextcloud.ini')
     target_81 = Path('/etc/php/8.1/mods-available/nextcloud.ini')
+    target_81 = Path('/etc/php/8.3/mods-available/nextcloud.ini')
     if get_phpversion() == "7.4":
         target_74.write_text(template.render(phpmod_context))
     elif get_phpversion() == "7.2":
         target_72.write_text(template.render(phpmod_context))
     elif get_phpversion() == "8.1":
+        target_81.write_text(template.render(phpmod_context))
+    elif get_phpversion() == "8.3":
         target_81.write_text(template.render(phpmod_context))
     sp.check_call(['phpenmod', 'nextcloud'])
 
@@ -307,6 +311,7 @@ def get_phpversion():
     Supports
     - 7.2 (bionic),
     - 7.4 (focal)
+    - 8.3 (noble)
     :return: string
     """
     response = sp.check_output(['php', '-v']).decode()
@@ -317,6 +322,8 @@ def get_phpversion():
         return "7.2"
     elif "PHP 8.1" in lines[0]:
         return "8.1"
+    elif "PHP 8.3" in lines[0]:
+        return "8.3"
     else:
         raise RuntimeError("No valid PHP version found in check")
 
