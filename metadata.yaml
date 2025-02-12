@@ -3,3 +3,46 @@ name: nextcloud
 description: Nextcloud is a file shareing, private office and collaboration platform.
 
 summary: The nextcloud charm
+
+provides:
+  website:
+    interface: http
+
+requires:
+  db:
+    interface: pgsql
+
+  database:
+    interface: postgresql_client
+    limit: 1
+
+  redis:
+    interface: redis
+    optional: true
+
+  shared-fs:
+    interface: mount
+    optional: true
+
+  ceph:
+    interface: ceph
+    optional: true
+
+peers:
+  cluster:
+    interface: nextcloud-cluster
+
+resources:
+  nextcloud-tarfile:
+    type: file
+    filename: nextcloud.tar.bz2
+    description: Nextcloud tar file to use instead of downloading it.
+
+storage:
+  datadir:
+    type: filesystem
+    description: This is used as datadir for nextcloud.
+    minimum-size: 100M
+    location: /var/nextcloud/data
+    multiple:
+      range: 0-1

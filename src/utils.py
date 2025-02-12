@@ -1,3 +1,4 @@
+import logging
 import subprocess as sp
 from subprocess import CompletedProcess
 import sys
@@ -11,7 +12,10 @@ import io
 import string
 from random import randint, choice
 from occ import Occ
+import charms.operator_libs_linux.v0.apt as apt
+from charms.operator_libs_linux.v0.apt import PackageNotFoundError, PackageError
 
+logger = logging.getLogger(__name__)
 
 def _modify_port(start=None, end=None, protocol='tcp', hook_tool="open-port"):
     assert protocol in {'tcp', 'udp', 'icmp'}
@@ -56,8 +60,6 @@ def set_nextcloud_permissions(charm):
 def install_dependencies():
     """
     Installs package dependencies for the supported distros.
-    + focal
-    + bionic
     :return:
     """
     distro_codename = sp.check_output(['lsb_release', '-sc'], universal_newlines=True).strip()
@@ -67,8 +69,10 @@ def install_dependencies():
         _install_dependencies_bionic()
     elif 'jammy' == distro_codename:
         _install_dependencies_jammy()
+    elif 'noble' == distro_codename:
+        _install_dependencies_noble()
     else:
-        raise RuntimeError("No valid series found to install package dependencies for")
+        raise RuntimeError(f"No valid series found to install package dependencies for {distro_codename}")
 
 
 def install_apt_update():
@@ -165,7 +169,7 @@ def _install_dependencies_focal():
 def _install_dependencies_jammy():
     """
     Install packages that is needed by nextcloud to work with this charm.
-    Inspired by: https://github.com/nextcloud/vm/blob/master/nextcloud_install_production.sh
+    Inspired by: https://github.com/nextcloud/vm/blob/main/nextcloud_install_production.sh
     :return:
     """
     packages = "apache2 php8.1 libapache2-mod-php8.1 php8.1-curl php8.1-xml \
@@ -182,6 +186,28 @@ def _install_dependencies_jammy():
         print(e)
         sys.exit(-1)
 
+def _install_dependencies_noble():
+    """
+    Install packages that is needed by nextcloud to work with this charm.
+    Inspired by: https://github.com/nextcloud/vm/blob/main/nextcloud_install_production.sh
+    :return:
+    """
+    packages = [
+        "php8.3-common", "php8.3-opcache", "php8.3-readline", "php8.3-cli", "php8.3-fpm",
+        "libapache2-mod-php8.3", "php8.3-igbinary", "php8.3-imagick", "php8.3-redis", "php8.3",
+        "php8.3-bcmath", "php8.3-curl", "php8.3-gd", "php8.3-gmp", "php8.3-intl", "php8.3-ldap",
+        "php8.3-mbstring", "php8.3-pgsql", "php8.3-xml", "php8.3-zip"
+    ]
+
+    try:
+        apt.update()
+        apt.add_package(packages)
+    except PackageNotFoundError:
+        logger.error("a specified package not found in package cache or on system")
+        sys.exit(1)
+    except PackageError as e:
+        logger.error("could not install package. Reason: %s", e.message)
+        sys.exit(1)
 
 def fetch_and_extract_nextcloud(tarfile_url):
     """
